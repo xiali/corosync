@@ -1412,7 +1412,7 @@ static int object_priv_get (
 	int res;
 	struct object_instance *object_instance;
 
-	objdb_unlock();
+	objdb_lock();
 	res = hdb_handle_get (&object_instance_database,
 		object_handle, (void *)&object_instance);
 	if (res != 0) {
@@ -1722,10 +1722,13 @@ static int object_track_start(hdb_handle_t object_handle,
 	struct object_instance *instance;
 	unsigned int res;
 	struct object_tracker * tracker_pt;
+	
+	objdb_lock();
 
 	res = hdb_handle_get (&object_instance_database,
 		object_handle, (void *)&instance);
 	if (res != 0) {
+		objdb_unlock();
 		return (res);
 	}
 	tracker_pt = malloc(sizeof(struct object_tracker));
@@ -1746,6 +1749,8 @@ static int object_track_start(hdb_handle_t object_handle,
 
 	hdb_handle_put (&object_instance_database, object_handle);
 
+	objdb_unlock();
+
 	return (res);
 }
 
@@ -1761,6 +1766,8 @@ static void object_track_stop(object_key_change_notify_fn_t key_change_notify_fn
 	struct list_head *list, *tmp_list;
 	struct list_head *obj_list, *tmp_obj_list;
 	unsigned int res;
+
+	objdb_lock();
 
 	/* go through the global list and find all the trackers to stop */
 	for (list = objdb_trackers_head.next, tmp_list = list->next;
@@ -1796,6 +1803,8 @@ static void object_track_stop(object_key_change_notify_fn_t key_change_notify_fn
 			free(tracker_pt);
 		}
 	}
+
+	objdb_unlock();
 }
 
 static int object_dump(hdb_handle_t object_handle,
@@ -1852,9 +1861,10 @@ static int object_reload_config(int flush, const char **error_string)
 	int res;
 
 	main_get_config_modules(&modules, &num_modules);
-	object_reload_notification(OBJDB_RELOAD_NOTIFY_START, flush);
 
 	objdb_lock();
+
+	object_reload_notification(OBJDB_RELOAD_NOTIFY_START, flush);
 
 	for (i=0; i<num_modules; i++) {
 		if (modules[i]->config_reloadconfig) {
@@ -1866,8 +1876,9 @@ static int object_reload_config(int flush, const char **error_string)
 			}
 		}
 	}
-	objdb_unlock();
+
 	object_reload_notification(OBJDB_RELOAD_NOTIFY_END, flush);
+	objdb_unlock();
 	return 0;
 }
 
